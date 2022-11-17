@@ -1,0 +1,5 @@
+name: fgbio
+channels:
+ - bioconda
+dependencies:
+ - fgbio=2.0.2

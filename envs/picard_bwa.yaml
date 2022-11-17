@@ -1,0 +1,6 @@
+name: picard
+channels:
+ - bioconda
+dependencies:
+ - picard=2.27.4
+ - bwa=0.7.17

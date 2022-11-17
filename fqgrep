@@ -1,0 +1,4 @@
+GATGGGACCCAC
+GATGGGTCCCAC
+BRAF
+for a in 100 200 1000 ; do fqgrep -a GATGGGTCCCAC  -r GATGGGACCCAC -1  18156DU-BRAF-${a}_R1_001.fastq.gz  -2 18156DU-BRAF-${a}_R2_001.fastq.gz  -t 4 -o fqgrep_$a ; done
