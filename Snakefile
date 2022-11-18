@@ -4,9 +4,8 @@ from collections import Counter
 DIRECTION=["1","2"]
 GROUPS=set()
 sample_sheet=pd.read_csv("samples.tsv", sep="\t",dtype=object)
-genome = '/home/stephano/Documents/02_gitHubProjects/DrukBam_Variant/test_data/chr7.fasta'
-
-
+genome = '/mnt/d/MOR_22_reanalyseTechnicalDataset/00_ref/chr7.fasta'
+tmp = '/home/drukewitz/conda_tmp/'
 def check_symlink(file1, file2):
     try:
         os.symlink(file1, file2)
@@ -25,7 +24,9 @@ for b in set(SAMPLES):
 rule all:
     input:
         expand('../01_raw/{sample}/fastqc/{sample}_{direction}P_fastqc.html',direction=DIRECTION, sample=SAMPLES),
-        expand('../04_ConsensusMappedBam/{sample}.consensus.bam', sample=SAMPLES)
+        expand('../05A_ConsensusMappedBam/{sample}.consensus.bam', sample=SAMPLES),
+        expand('../05B_ConsensusMappedBam/{sample}.consensus.bam', sample=SAMPLES),
+
 
 rule fastqc1:
     input:
@@ -54,7 +55,7 @@ rule Fastq2Sam:
     threads:1
     
     shell:
-        'picard FastqToSam FASTQ={input.r1} FASTQ2={input.r2} O={output.unmappedBam} SM=sample'
+        'picard FastqToSam TMP_DIR={tmp} FASTQ={input.r1} FASTQ2={input.r2} O={output.unmappedBam} SM=sample'
         
 
 
@@ -68,7 +69,7 @@ rule ExtractUmisFromBam:
         "envs/fgbio.yaml"
     threads:1
     shell:
-        'fgbio ExtractUmisFromBam --input={input.unmappedBam} --output={output.unmappedBamwithUMI} --read-structure=3M2S146T 3M2S146T --molecular-index-tags=ZA ZB --single-tag=RX'
+        'fgbio -XX:-UseGCOverheadLimit -Xms750m -Xmx24g --tmp-dir={tmp} ExtractUmisFromBam --input={input.unmappedBam} --output={output.unmappedBamwithUMI} --read-structure=3M2S146T 3M2S146T --molecular-index-tags=ZA ZB --single-tag=RX'
 
 
 
@@ -98,12 +99,12 @@ rule Mapping:
 
     conda:
         "envs/picard_bwa.yaml"
-    threads:4
+    threads:12
     
     shell:
-        'picard SamToFastq I={input.unmappedBamwithUMI} F=/dev/stdout INTERLEAVE=true \
+        'picard SamToFastq TMP_DIR={tmp} I={input.unmappedBamwithUMI} F=/dev/stdout INTERLEAVE=true \
             | bwa mem -p -t {threads} {genome} /dev/stdin \
-                | picard MergeBamAlignment \
+                | picard MergeBamAlignment  \
                     UNMAPPED={input.unmappedBamwithUMI} ALIGNED=/dev/stdin O={output.mappedBAM} R={genome} \
                     SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
                     ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true'
@@ -120,8 +121,16 @@ rule GroupReadsByUmi:
         "envs/fgbio.yaml"
 
     shell:
-        'fgbio GroupReadsByUmi --input={input.mappedBAM} --output={output.groupedmappedBAM} --strategy=paired --edits=1 --min-map-q=2'
+        'fgbio -XX:-UseGCOverheadLimit -Xms750m -Xmx24g --tmp-dir={tmp} GroupReadsByUmi --input={input.mappedBAM} --output={output.groupedmappedBAM} --strategy=paired --edits=1 --min-map-q=2'
 
+
+
+
+
+
+
+
+###################################################################################################################################################
 
 
 
@@ -130,7 +139,7 @@ rule CallDuplexConsensusReads:
         groupedmappedBAM = '../03_mappedBam/{sample}.grouped.mapped.bam'
         
     output:
-        groupedmappedconsensusBAM = '../03_mappedBam/{sample}.grouped.mapped.consensus.bam'
+        groupedUnmappedconsensusBAM = '../04A_mappedBam/{sample}.grouped.mapped.consensus.bam'
 
     threads:1
     
@@ -138,30 +147,107 @@ rule CallDuplexConsensusReads:
         "envs/fgbio.yaml"
 
     shell:
-        'fgbio CallDuplexConsensusReads \
-            --input={input.groupedmappedBAM} --output={output.groupedmappedconsensusBAM} \
+        'fgbio -XX:-UseGCOverheadLimit -Xms750m -Xmx24g --tmp-dir={tmp} CallDuplexConsensusReads \
+            --input={input.groupedmappedBAM} --output={output.groupedUnmappedconsensusBAM} \
             --error-rate-pre-umi=45 --error-rate-post-umi=30 \
             --min-input-base-quality=30'
 
 
-rule CallMappConsensusReads:
+rule CallMolecularConsensusReads:
     input:
-        groupedmappedconsensusBAM = '../03_mappedBam/{sample}.grouped.mapped.consensus.bam'
+        groupedmappedBAM = '../03_mappedBam/{sample}.grouped.mapped.bam'
         
     output:
-        consensusmapped2BAM= '../04_ConsensusMappedBam/{sample}.consensus.bam'
+        groupedUnmappedconsensusBAM = '../04B_mappedBam/{sample}.grouped.mapped.consensus.bam'
+
+    threads:1
+    
+    conda:
+        "envs/fgbio.yaml"
+
+    shell:
+        'fgbio -XX:-UseGCOverheadLimit \
+            -Xms750m -Xmx24g --tmp-dir={tmp} \
+            CallMolecularConsensusReads --min-input-base-quality=2 --min-reads=1 --max-reads=1000000 --output-per-base-tags=false --sort-order=:none: -i {input.groupedmappedBAM} -o {output.groupedUnmappedconsensusBAM}'
+
+
+###################################################################################################################################################
+
+
+
+rule SortBamA:
+    input:
+        groupedUnmappedconsensusBAM = '../04A_mappedBam/{sample}.grouped.mapped.consensus.bam'
+    output:
+        groupedUnmappedconsensusBAMsorted = '../04A_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
+    threads:1
+    
+    conda:
+        "envs/picard_bwa.yaml"
+
+    shell:
+        "picard SortSam -I {input.groupedUnmappedconsensusBAM} -O {output.groupedUnmappedconsensusBAMsorted} -SO queryname"
+
+
+rule SortBamB:
+    input:
+        groupedUnmappedconsensusBAM = '../04B_mappedBam/{sample}.grouped.mapped.consensus.bam'
+    output:
+        groupedUnmappedconsensusBAMsorted = '../04B_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
+    threads:1
+    
+    conda:
+        "envs/picard_bwa.yaml"
+
+    shell:
+        "picard SortSam -I {input.groupedUnmappedconsensusBAM} -O {output.groupedUnmappedconsensusBAMsorted} -SO queryname"
+
+
+
+
+
+
+rule CallMappConsensusReadsA:
+    input:
+        groupedmappedconsensusBAM = '../04A_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
         
-    threads:4
+    output:
+        consensusmapped2BAM= '../05A_ConsensusMappedBam/{sample}.consensus.bam'
+        
+    threads:12
 
     conda:
         "envs/picard_bwa.yaml"
 
     shell:
-        'picard SamToFastq I={input.groupedmappedconsensusBAM} \
+        'picard SamToFastq TMP_DIR={tmp} I={input.groupedmappedconsensusBAM} \
             F=/dev/stdout INTERLEAVE=true \
             | bwa mem -p -t {threads} {genome} /dev/stdin \
             | picard MergeBamAlignment \
-            UNMAPPED={input.groupedmappedconsensusBAM}  ALIGNED=/dev/stdin \
-            O={output.consensusmapped2BAM} R={genome} \
+            UNMAPPED={input.groupedmappedconsensusBAM}  ALIGNED=/dev/stdin O={output.consensusmapped2BAM} R={genome} \
+            SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
+            ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true'
+
+
+
+
+rule CallMappConsensusReadsB:
+    input:
+        groupedmappedconsensusBAM = '../04B_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
+        
+    output:
+        consensusmapped2BAM= '../05B_ConsensusMappedBam/{sample}.consensus.bam'
+        
+    threads:12
+
+    conda:
+        "envs/picard_bwa.yaml"
+
+    shell:
+        'picard SamToFastq TMP_DIR={tmp} I={input.groupedmappedconsensusBAM} \
+            F=/dev/stdout INTERLEAVE=true \
+            | bwa mem -p -t {threads} {genome} /dev/stdin \
+            | picard MergeBamAlignment \
+            UNMAPPED={input.groupedmappedconsensusBAM}  ALIGNED=/dev/stdin O={output.consensusmapped2BAM} R={genome} \
             SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
             ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true'
