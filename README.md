@@ -9,10 +9,10 @@
 * use the module like this:
 
 ```
-$ cd dna_module_1
+$ cd xGen_CS_Adapters_fgbioUMI
 ```
 
-the current working dirtectory needs to be the rna_module_1 folder 
+the current working dirtectory needs to be the xGen_CS_Adapters_fgbioUMI folder 
 
 ```
 snakemake --use-conda --cores 8 --conda-prefix "folder where conda should store the envs data (is optional)"
@@ -26,20 +26,14 @@ snakemake --use-conda --cores 8 --conda-prefix "folder where conda should store 
 ```
 .
 ├── 01_raw
-├── 02_trimmed
-├── 03_mapped
-├── 04_Bedtools_count
-├── 05_featureCount
-├── 06_Overview_Mapping
-├── folder.txt
-└── dna_module_1
+├── 02_unmappedBam
+├── 03_mappedBam
+├── 04_CallMolecularConsensusReads
+├── 05_ConsensusMappedBam
+├── 06_Vardict
+└── xGen_CS_Adapters_fgbioUMI
     ├── data
-    │   ├── NexteraPE-PE.fa
-    │   ├── TruSeq2-PE.fa
-    │   ├── TruSeq2-SE.fa
-    │   ├── TruSeq3-PE-2.fa
-    │   ├── TruSeq3-PE.fa
-    │   └── TruSeq3-SE.fa
+    │   ├── Twist-custom_hg19.bed
     ├── envs
     │   ├── bedtools.yaml
     │   ├── fastqc.yaml

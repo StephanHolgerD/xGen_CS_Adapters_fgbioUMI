@@ -1,2 +1,2 @@
 ID	forward reads	reverse reads
-BRAF_100_ALT	/home/stephano/Documents/02_gitHubProjects/mosaic_umi/Stephan/fqgrep_100/ALT_18156DU-BRAF-100.R1.fastq.gz	/home/stephano/Documents/02_gitHubProjects/mosaic_umi/Stephan/fqgrep_100/ALT_18156DU-BRAF-100.R1.fastq.gz
+BRAF_100_ALT	/mnt/d/2022/MOR/MOR_22_reanalyseTechnicalDataset/01_data/00_KnutFTP/18156DU-BRAF-100_R1_001.fastq.gz	/mnt/d/2022/MOR/MOR_22_reanalyseTechnicalDataset/01_data/00_KnutFTP/18156DU-BRAF-100_R1_001.fastq.gz

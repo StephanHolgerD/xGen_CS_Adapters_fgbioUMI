@@ -1,11 +1,24 @@
 import os
 import pandas as pd
 from collections import Counter
+
+#change to the path of your ref genome
+genome = '/mnt/d/2022/MOR/MOR_22_reanalyseTechnicalDataset/00_ref/chr7.fasta'
+tmp = '/home/drukewitz/conda_tmp/'
+
+
+bed = 'data/Twist-custom_hg19.bed'
+
+
+
+
+
+
 DIRECTION=["1","2"]
 GROUPS=set()
 sample_sheet=pd.read_csv("samples.tsv", sep="\t",dtype=object)
-genome = '/mnt/d/MOR_22_reanalyseTechnicalDataset/00_ref/chr7.fasta'
-tmp = '/home/drukewitz/conda_tmp/'
+
+
 def check_symlink(file1, file2):
     try:
         os.symlink(file1, file2)
@@ -23,22 +36,8 @@ for b in set(SAMPLES):
 
 rule all:
     input:
-        expand('../01_raw/{sample}/fastqc/{sample}_{direction}P_fastqc.html',direction=DIRECTION, sample=SAMPLES),
-        expand('../05A_ConsensusMappedBam/{sample}.consensus.bam', sample=SAMPLES),
-        expand('../05B_ConsensusMappedBam/{sample}.consensus.bam', sample=SAMPLES),
+        expand('../06_Vardict/{sample}.vcf', sample=SAMPLES),
 
-
-rule fastqc1:
-    input:
-        r = '../01_raw/{sample}/{sample}_{direction}P.fastq.gz',
-    threads: 2
-    priority: 50
-    output:
-        '../01_raw/{sample}/fastqc/{sample}_{direction}P_fastqc.html'
-    conda:
-        "envs/fastqc.yaml"
-    shell:
-        'fastqc -o ../01_raw/{wildcards.sample}/fastqc -t {threads} --extract {input.r}'
 
 
 
@@ -70,7 +69,6 @@ rule ExtractUmisFromBam:
     threads:1
     shell:
         'fgbio -XX:-UseGCOverheadLimit -Xms750m -Xmx24g --tmp-dir={tmp} ExtractUmisFromBam --input={input.unmappedBam} --output={output.unmappedBamwithUMI} --read-structure=3M2S146T 3M2S146T --molecular-index-tags=ZA ZB --single-tag=RX'
-
 
 
 
@@ -125,32 +123,7 @@ rule GroupReadsByUmi:
 
 
 
-
-
-
-
-
 ###################################################################################################################################################
-
-
-
-rule CallDuplexConsensusReads:
-    input:
-        groupedmappedBAM = '../03_mappedBam/{sample}.grouped.mapped.bam'
-        
-    output:
-        groupedUnmappedconsensusBAM = '../04A_mappedBam/{sample}.grouped.mapped.consensus.bam'
-
-    threads:1
-    
-    conda:
-        "envs/fgbio.yaml"
-
-    shell:
-        'fgbio -XX:-UseGCOverheadLimit -Xms750m -Xmx24g --tmp-dir={tmp} CallDuplexConsensusReads \
-            --input={input.groupedmappedBAM} --output={output.groupedUnmappedconsensusBAM} \
-            --error-rate-pre-umi=45 --error-rate-post-umi=30 \
-            --min-input-base-quality=30'
 
 
 rule CallMolecularConsensusReads:
@@ -158,7 +131,7 @@ rule CallMolecularConsensusReads:
         groupedmappedBAM = '../03_mappedBam/{sample}.grouped.mapped.bam'
         
     output:
-        groupedUnmappedconsensusBAM = '../04B_mappedBam/{sample}.grouped.mapped.consensus.bam'
+        groupedUnmappedconsensusBAM = '../04_CallMolecularConsensusReads/{sample}.grouped.mapped.consensus.bam'
 
     threads:1
     
@@ -175,25 +148,11 @@ rule CallMolecularConsensusReads:
 
 
 
-rule SortBamA:
+rule SortBam:
     input:
-        groupedUnmappedconsensusBAM = '../04A_mappedBam/{sample}.grouped.mapped.consensus.bam'
+        groupedUnmappedconsensusBAM = '../04_CallMolecularConsensusReads/{sample}.grouped.mapped.consensus.bam'
     output:
-        groupedUnmappedconsensusBAMsorted = '../04A_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
-    threads:1
-    
-    conda:
-        "envs/picard_bwa.yaml"
-
-    shell:
-        "picard SortSam -I {input.groupedUnmappedconsensusBAM} -O {output.groupedUnmappedconsensusBAMsorted} -SO queryname"
-
-
-rule SortBamB:
-    input:
-        groupedUnmappedconsensusBAM = '../04B_mappedBam/{sample}.grouped.mapped.consensus.bam'
-    output:
-        groupedUnmappedconsensusBAMsorted = '../04B_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
+        groupedUnmappedconsensusBAMsorted = '../04_CallMolecularConsensusReads/{sample}.grouped.mapped.consensus.sorted.bam'
     threads:1
     
     conda:
@@ -205,14 +164,12 @@ rule SortBamB:
 
 
 
-
-
-rule CallMappConsensusReadsA:
+rule CallMappConsensusReads:
     input:
-        groupedmappedconsensusBAM = '../04A_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
+        groupedmappedconsensusBAM = '../04_CallMolecularConsensusReads/{sample}.grouped.mapped.consensus.sorted.bam'
         
     output:
-        consensusmapped2BAM= '../05A_ConsensusMappedBam/{sample}.consensus.bam'
+        consensusmappedBAM= '../05_ConsensusMappedBam/{sample}.consensus.bam'
         
     threads:12
 
@@ -224,30 +181,26 @@ rule CallMappConsensusReadsA:
             F=/dev/stdout INTERLEAVE=true \
             | bwa mem -p -t {threads} {genome} /dev/stdin \
             | picard MergeBamAlignment \
-            UNMAPPED={input.groupedmappedconsensusBAM}  ALIGNED=/dev/stdin O={output.consensusmapped2BAM} R={genome} \
+            UNMAPPED={input.groupedmappedconsensusBAM}  ALIGNED=/dev/stdin O={output.consensusmappedBAM} R={genome} \
             SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
             ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true'
 
 
-
-
-rule CallMappConsensusReadsB:
+rule VardictCalling:
     input:
-        groupedmappedconsensusBAM = '../04B_mappedBam/{sample}.grouped.mapped.consensus.sorted.bam'
-        
+        consensusmappedBAM= '../05_ConsensusMappedBam/{sample}.consensus.bam'
+    
+    threads: 6
+
     output:
-        consensusmapped2BAM= '../05B_ConsensusMappedBam/{sample}.consensus.bam'
-        
-    threads:12
+        vcf= '../06_Vardict/{sample}.vcf'
 
     conda:
-        "envs/picard_bwa.yaml"
+        "envs/vardict.yaml"
 
     shell:
-        'picard SamToFastq TMP_DIR={tmp} I={input.groupedmappedconsensusBAM} \
-            F=/dev/stdout INTERLEAVE=true \
-            | bwa mem -p -t {threads} {genome} /dev/stdin \
-            | picard MergeBamAlignment \
-            UNMAPPED={input.groupedmappedconsensusBAM}  ALIGNED=/dev/stdin O={output.consensusmapped2BAM} R={genome} \
-            SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
-            ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true'
+        'vardict-java -G {genome} \
+            -th {threads} -f 0.001 -r 2 \
+            -b {input.consensusmappedBAM} \
+            -z -c 1 -S 2 -E 3 -g 4 \
+            --nosv {bed}| teststrandbias.R | var2vcf_valid.pl -E -f 0.001 > {output.vcf}'
