@@ -141,7 +141,7 @@ rule CallMolecularConsensusReads:
     shell:
         'fgbio -XX:-UseGCOverheadLimit \
             -Xms750m -Xmx24g --tmp-dir={tmp} \
-            CallMolecularConsensusReads --min-input-base-quality=2 --min-reads=1 --max-reads=1000000 --output-per-base-tags=false --sort-order=:none: -i {input.groupedmappedBAM} -o {output.groupedUnmappedconsensusBAM}'
+            CallMolecularConsensusReads --min-input-base-quality=10 --min-reads=2 --max-reads=1000000 --output-per-base-tags=false --sort-order=:none: -i {input.groupedmappedBAM} -o {output.groupedUnmappedconsensusBAM}'
 
 
 ###################################################################################################################################################
