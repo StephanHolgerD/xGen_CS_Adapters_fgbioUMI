@@ -1,4 +1,4 @@
-## Module 1 of the Snakemake DNA Pipeline
+## Snakemake for xGen_CS_Adapters_fgbioUMI chemistry
 
 * needs a working conda installation and conda in path
 
